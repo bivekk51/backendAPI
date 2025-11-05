@@ -66,5 +66,7 @@ secrets.json
 docker-compose.override.yml
 .env.docker
 
+#postman collections
+tixhub_collection.json
 # Allow keeping local overrides example
 # !.env.example
