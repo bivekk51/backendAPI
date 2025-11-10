@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Ticket = require('../models/Ticket');
 const Event = require('../models/Event');
+const redisClient = require('../config/redis');
 const { NotFoundError, AuthorizationError, ValidationError, ConflictError } = require('../utils/errors');
 
 const HOLD_DURATION_MS = 10 * 60 * 1000;
@@ -50,6 +51,12 @@ const createBooking = async (eventId, userId, quantity) => {
 
     await session.commitTransaction();
     
+    // Invalidate availability cache after booking
+    await Promise.all([
+      redisClient.invalidateEventAvailability(eventId),
+      redisClient.invalidateEvent(eventId) // Event data includes availableTickets
+    ]);
+    
     return await Ticket.findById(ticket[0]._id)
       .populate('event', 'name date location price')
       .populate('user', 'name email');
@@ -91,6 +98,9 @@ const confirmBooking = async (ticketId, userId) => {
     ticket.status = 'confirmed';
     ticket.holdExpiry = undefined;
     await ticket.save();
+
+    // Update availability cache after confirmation
+    await redisClient.invalidateEventAvailability(ticket.event);
 
     return await Ticket.findById(ticketId)
       .populate('event', 'name date location price')
